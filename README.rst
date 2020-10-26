@@ -163,7 +163,7 @@ Via Docker
 
 .. code-block::
 
-   docker run -v `pwd`:`pwd` -w `pwd` coleslawndex/ndexsignorloader:1.1.0 ndexloadsignor.py --conf conf # TODO Add other needed arguments here
+   docker run -v `pwd`:`pwd` -w `pwd` coleslawndex/ndexsignorloader:1.1.1 ndexloadsignor.py --conf conf # TODO Add other needed arguments here
 
 
 Credits
