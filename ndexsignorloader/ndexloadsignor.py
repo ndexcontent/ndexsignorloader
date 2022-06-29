@@ -3,6 +3,7 @@
 import os
 import argparse
 import sys
+import time
 import copy
 import random
 import requests
@@ -148,6 +149,12 @@ def _parse_arguments(desc, args):
                         choices=['PUBLIC', 'PRIVATE'],
                         help='Sets visibility of new '
                              'networks, default (PUBLIC)')
+    parser.add_argument('--indexlevel', default='ALL',
+                        choices=['NONE', 'META', 'ALL'],
+                        help='Sets index level for new and updated '
+                             'networks')
+    parser.add_argument('--disableshowcase', action='store_true',
+                        help='If set, networks will NOT be showcased')
     parser.add_argument('--style',
                         help='Path to NDEx CX file to use for styling'
                              'networks, or NDEx UUID which must be '
@@ -162,6 +169,10 @@ def _parse_arguments(desc, args):
                         help='If set, skips download of data from signor'
                              'and assumes data already resides in <datadir>'
                              'directory')
+    parser.add_argument('--skipfull', action='store_true',
+                        help='If set, skips generation (not download) of '
+                             'Complete Human, Rat, Mouse '
+                             'pathways')
     parser.add_argument('--signorurl', default=SIGNOR_URL,
                         help='URL to signor pathways (default ' +
                         SIGNOR_URL + ')')
@@ -761,6 +772,24 @@ class SpringLayoutUpdator(NetworkUpdator):
         """
         return random.uniform(self._min, self._max)
 
+    def _are_all_nodes_same_location(self, network):
+        """
+
+        :param network:
+        :return:
+        """
+        node_loc = set()
+        compartment = NodeLocationUpdator.LOCATION
+        for nodeid, node in network.get_nodes():
+            node_attr = network.get_node_attribute(nodeid,
+                                                   compartment)
+            if node_attr is None:
+                continue
+            node_loc.add(node_attr['v'])
+        if len(node_loc) <= 1:
+            return True
+        return False
+
     def _get_initial_node_positions(self, network):
         """
         Based on Compartment node attribute position nodes
@@ -820,13 +849,15 @@ class SpringLayoutUpdator(NetworkUpdator):
                            'y': float(net_x.pos[n][1])})
         return coords
 
-    def _get_networkx_object(self, network):
+    def _get_networkx_object(self, network, nodes_same_loc=False):
         """
 
         :param network:
         :return:
         """
         net_x = network.to_networkx(mode='default')
+        if nodes_same_loc is True:
+            return net_x
         net_x.add_node(SpringLayoutUpdator.EXTRACELLULAR,
                        weight=self._location_weight)
         net_x.add_node(SpringLayoutUpdator.RECEPTOR,
@@ -839,7 +870,6 @@ class SpringLayoutUpdator(NetworkUpdator):
                        weight=self._location_weight)
 
         compartment = NodeLocationUpdator.LOCATION
-
         for nodeid, node in network.get_nodes():
             node_attr = network.get_node_attribute(nodeid,
                                                    compartment)
@@ -862,18 +892,30 @@ class SpringLayoutUpdator(NetworkUpdator):
             return ['network is None']
 
         issues = []
+        nodes_same_loc = self._are_all_nodes_same_location(network)
 
-        net_x = self._get_networkx_object(network)
+        net_x = self._get_networkx_object(network, nodes_same_loc=nodes_same_loc)
 
         numnodes = len(network.get_nodes())
         updatedscale = self._scale - numnodes
         updatedk = 1000.0 + numnodes*20
         pos_dict = self._get_initial_node_positions(network)
-        net_x.pos = networkx.drawing.spring_layout(net_x, scale=updatedscale,
-                                                   seed=self._seed,
-                                                   pos=pos_dict,
-                                                   k=updatedk,
-                                                   iterations=self._iterations)
+
+        # reason for this is if all nodes are of same type
+        # the nodes end up all on the same y coordinate in a big
+        # row. Partial fix for issue:
+        # https://ndexbio.atlassian.net/browse/UD-1677
+        if nodes_same_loc is True:
+            net_x.pos = networkx.drawing.spring_layout(net_x, scale=updatedscale,
+                                                       seed=self._seed,
+                                                       k=updatedk,
+                                                       iterations=self._iterations)
+        else:
+            net_x.pos = networkx.drawing.spring_layout(net_x, scale=updatedscale,
+                                                       seed=self._seed,
+                                                       pos=pos_dict,
+                                                       k=updatedk,
+                                                       iterations=self._iterations)
 
         network.set_opaque_aspect(SpringLayoutUpdator.CARTESIAN_LAYOUT,
                                   self._get_cartesian_aspect(net_x))
@@ -1440,9 +1482,12 @@ class LoadSignorIntoNDEx(object):
         self._full_loadplan = None
         self._template = None
         self._net_summaries = None
+        self._net_labels = None
         self._downloader = downloader
         self._updators = updators
         self._visibility = args.visibility
+        self._indexlevel = args.indexlevel
+        self._showcase = not args.disableshowcase
 
     def _parse_config(self):
             """
@@ -1504,6 +1549,49 @@ class LoadSignorIntoNDEx(object):
         else:
             self._template = ndex2.create_nice_cx_from_file(os.path.abspath(self._args.style))
 
+    def _load_network_labels_for_user(self):
+        """
+        Gets a dictionary of all networks for a user account in
+        this format:
+
+        <value of labels network attribute joined by if list> => <NDEx UUID>
+
+        If a network does not have a **labels** network attribute, the
+        network is ignored
+        :return:
+        """
+        net_summaries = self._ndex.get_network_summaries_for_user(self._user)
+        self._net_labels = {}
+        for nk in net_summaries:
+            # nk['externalId']
+            val = self._get_labels_network_attribute(netid=nk['externalId'])
+            if val is None:
+                continue
+            if isinstance(val, list):
+                valstr = ','.join(val)
+            else:
+                valstr = str(val)
+            self._net_labels[valstr.upper()] = nk['externalId']
+
+    def _get_labels_network_attribute(self, netid=None):
+        """
+        Queries NDEx for networkAttributes aspect and returns
+        value of **labels** network attribute
+
+        :param netid: NDEx network UUID
+        :type netid: str
+        :return: Value of labels network attribute
+        """
+        resp = self._ndex.get_network_aspect_as_cx_stream(netid, 'networkAttributes')
+        if resp.status_code != 200:
+            logger.error('Error getting network attributes for network: ' + str(netid))
+            return None
+        for n_attr in resp.json():
+            if n_attr['n'] != 'labels':
+                continue
+            return n_attr['v']
+        return None
+
     def _load_network_summaries_for_user(self):
         """
         Gets a dictionary of all networks for user account
@@ -1515,6 +1603,31 @@ class LoadSignorIntoNDEx(object):
         for nk in net_summaries:
             if nk.get('name') is not None:
                 self._net_summaries[nk.get('name').upper()] = nk.get('externalId')
+
+    def _wait_for_network_to_be_ready(self, client, netid,
+                                      num_retries=10, retry_wait=1):
+        """
+        Waits for network to be ready for additional modification
+
+        :param client: NDEx client
+        :type client: :py:class:`~ndex2.client.Ndex2`
+        :param netid: Network UUID
+        :type netid: str
+        :param num_retries:
+        :type num_retries: int
+        :param retry_wait:
+        :type retry_wait: int or float
+        :return: None if network is not ready otherwise the network summary
+        :rtype: dict
+        """
+        retrycount = 1
+        while retrycount < num_retries:
+            netsum = client.get_network_summary(network_id=netid)
+            if netsum['completed'] is True:
+                return netsum
+            retrycount += 1
+            time.sleep(retry_wait)
+        return None
 
     def _get_signor_pathway_relations_df(self, pathway_id,
                                          is_full_pathway=False):
@@ -1633,7 +1746,7 @@ class LoadSignorIntoNDEx(object):
         # apply style to network
         network.apply_style_from_network(self._template)
 
-        network_update_key = self._net_summaries.get(network.get_name().upper())
+        network_update_key = self._get_matching_network_on_server_to_update(network)
 
         self._add_node_types_in_network_to_report(network, report)
 
@@ -1642,10 +1755,46 @@ class LoadSignorIntoNDEx(object):
             network.update_to(network_update_key, self._server,
                               self._user, self._pass,
                               user_agent=self._get_user_agent())
+            netid = network_update_key
         else:
-            self._ndex.save_new_network(network.to_cx(),
-                                        visibility=self._visibility)
+            res = self._ndex.save_new_network(network.to_cx(),
+                                              visibility=self._visibility)
+            netid = re.sub('^.*/', '', res)
+
+        waitres = self._wait_for_network_to_be_ready(self._ndex, netid)
+        if waitres is not None:
+            self._ndex.set_network_system_properties(netid, {'showcase': self._showcase,
+                                                             'visibility': self._visibility,
+                                                             'index_level': self._indexlevel})
+        else:
+            report.addissues('Updating index, showcase, visibility',
+                             ['Network ' + str(network.get_name()) + ' not ready'])
+
         return report
+
+    def _get_matching_network_on_server_to_update(self, network):
+        """
+        Searches for matching network first by **labels** network
+        attribute and then by name of network if **labels** does
+        not match
+
+        :param network:
+        :type network: :py:class:`~ndex2.nice_cx_network.NiceCXNetwork`
+        :return: NDEx UUID of network to update or None
+        :rtype: str
+        """
+        n_attr = network.get_network_attribute('labels')
+        if n_attr is None:
+            # attempt to match by name
+            return self._net_summaries.get(network.get_name().upper())
+
+        val = n_attr['v']
+        if isinstance(val, list):
+            valstr = ','.join(val)
+        else:
+            valstr = str(val)
+
+        return self._net_labels.get(valstr.upper())
 
     def _set_generatedby_in_network_attributes(self, network):
         """
@@ -1864,6 +2013,7 @@ class LoadSignorIntoNDEx(object):
         self._parse_load_plan()
         self._create_ndex_connection()
         self._load_network_summaries_for_user()
+        self._load_network_labels_for_user()
         self._load_style_template()
         report_list = []
 
@@ -1880,15 +2030,16 @@ class LoadSignorIntoNDEx(object):
                                  ' => ' + pathway_map[key])
 
         # process full pathways
-        for orgname in ['Human', 'Mouse', 'Rat']:
-            pname = 'Signor Complete - ' + orgname
-            logger.info('Processing full ' + pname)
-            try:
-                report_list.append(self._process_pathway('full_' + orgname,
-                                                         pname))
-            except NDExLoadSignorError as ne:
-                logger.exception('Unable to load pathway: ' +
-                                 'full_' + orgname + '.txt')
+        if self._args.skipfull is False:
+            for orgname in ['Human', 'Mouse', 'Rat']:
+                pname = 'Signor Complete - ' + orgname
+                logger.info('Processing full ' + pname)
+                try:
+                    report_list.append(self._process_pathway('full_' + orgname,
+                                                             pname))
+                except NDExLoadSignorError as ne:
+                    logger.exception('Unable to load pathway: ' +
+                                     'full_' + orgname + '.txt')
 
         node_type = set()
         for entry in report_list:

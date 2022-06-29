@@ -40,6 +40,9 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
             fargs.profile = 'hi'
             fargs.datadir = temp_dir
             fargs.visibility = 'PUBLIC'
+            fargs.indexlevel = 'ALL'
+            fargs.disableshowcase = False
+
             loader = LoadSignorIntoNDEx(fargs, None)
             loader._parse_config()
             self.assertEqual('theuser', loader._user)
@@ -55,6 +58,9 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.datadir = '/'
         fargs.visibility = 'PUBLIC'
         fargs.version = '0.3.0'
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
+
         loader = LoadSignorIntoNDEx(fargs, None)
         res = loader._get_user_agent()
         self.assertEqual('ndexsignorloader/0.3.0', res)
@@ -66,6 +72,9 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.datadir = '/'
         fargs.visibility = 'PUBLIC'
         fargs.edgecollapse = True
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
+
         loader = LoadSignorIntoNDEx(fargs, None)
         net = NiceCXNetwork()
         loader._set_edgecollapse_notes(net)
@@ -79,6 +88,9 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.datadir = '/'
         fargs.visibility = 'PUBLIC'
         fargs.edgecollapse = False
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
+
         loader = LoadSignorIntoNDEx(fargs, None)
         net = NiceCXNetwork()
         loader._set_edgecollapse_notes(net)
@@ -91,6 +103,8 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.profile = 'profile'
         fargs.datadir = '/foo'
         fargs.visibility = 'PUBLIC'
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
 
         loader = LoadSignorIntoNDEx(fargs, None)
         net = NiceCXNetwork()
@@ -121,6 +135,8 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.datadir = '/foo'
         fargs.iconurl = 'hi'
         fargs.visibility = 'PUBLIC'
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
 
         loader = LoadSignorIntoNDEx(fargs, None)
         net = NiceCXNetwork()
@@ -134,6 +150,8 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.profile = 'profile'
         fargs.datadir = '/foo'
         fargs.visibility = 'PUBLIC'
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
 
         loader = LoadSignorIntoNDEx(fargs, None)
 
@@ -172,6 +190,8 @@ class TestLoadSignorIntoNDex(unittest.TestCase):
         fargs.profile = 'profile'
         fargs.datadir = '/foo'
         fargs.visibility = 'PUBLIC'
+        fargs.indexlevel = 'ALL'
+        fargs.disableshowcase = False
 
         loader = LoadSignorIntoNDEx(fargs, None)
 

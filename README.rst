@@ -60,6 +60,12 @@ This tool downloads data files from Signor_ and performs the following operation
 * **type** is set to a list with **pathway** and if known type of pathway
 * **__normalizationversion** is set to **0.1**
 
+The script will attempt to update in place on NDEx any matching networks. The matching is
+performed by looking for (ignore case) match of the **labels** network attribute of any
+networks owned by the user configured. If no match there is found then (ignore case) match
+of the network name is used to update. In scenario of multiple matches in **labels** or by
+name, one randomly is chosen and updated.
+
 Dependencies
 ------------
 

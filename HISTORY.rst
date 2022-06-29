@@ -2,6 +2,18 @@
 History
 =======
 
+1.2.0 (2022-06-29)
+-------------------
+
+* Uploaded networks are now public, searchable, showcased, and, fully
+  indexed by default
+
+* The search for networks to update is done by matching the **labels**
+  network attribute first and if no match is found, the name is used
+
+* Fixed bug where some networks were laid out on a single horizontal
+  line. This happened when the nodes location were all the same
+
 1.1.1 (2020-10-16)
 -------------------
 
