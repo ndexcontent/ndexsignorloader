@@ -2,17 +2,24 @@
 History
 =======
 
-1.2.0 (2022-06-29)
+1.2.0 (2022-07-06)
 -------------------
 
-* Uploaded networks are now public, searchable, showcased, and, fully
+* Uploaded networks are now public, searchable, showcased, and fully
   indexed by default
 
 * The search for networks to update is done by matching the **labels**
   network attribute first and if no match is found, the name is used
 
 * Fixed bug where some networks were laid out on a single horizontal
-  line. This happened when the nodes location were all the same
+  line. This happened when the `location` attribute for all nodes
+  in a network were all the same
+
+* Fixed bug where duplicate symbols ended up in `member` attribute of nodes UD-2078
+
+* Uses **labels** network attribute (if found) to find network on NDEx to update instead
+  of upload as new. If no **labels** match, then any network matching the **name** of
+  network is updated otherwise network is uploaded as a new network. UD-1677
 
 1.1.1 (2020-10-16)
 -------------------
