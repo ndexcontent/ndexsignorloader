@@ -152,7 +152,7 @@ def _parse_arguments(desc, args):
     parser.add_argument('--indexlevel', default='ALL',
                         choices=['NONE', 'META', 'ALL'],
                         help='Sets index level for new and updated '
-                             'networks')
+                             'networks, default (ALL)')
     parser.add_argument('--disableshowcase', action='store_true',
                         help='If set, networks will NOT be showcased')
     parser.add_argument('--style',
@@ -966,7 +966,7 @@ class NodeMemberUpdator(NetworkUpdator):
             return ['No proteins obtained for node: ' + str(node)]
 
         issues = []
-        memberlist = []
+        member_set = set()
         for entry in proteinlist:
             g_symbol = self._genesearcher.get_symbol(entry)
             if g_symbol is None or g_symbol == '':
@@ -975,15 +975,24 @@ class NodeMemberUpdator(NetworkUpdator):
                               str(entry) + '. Skipping.')
                 continue
 
-            memberlist.append('hgnc.symbol:' + g_symbol)
-        if len(memberlist) == 0:
+            symbol_w_prefix = 'hgnc.symbol:' + g_symbol
+
+            # this is merely to report the duplicate cause
+            # the set will automatically skip the insertion
+            # fix for UD-2078
+            if symbol_w_prefix in member_set:
+                issues.append(entry + ' mapping to gene: ' + g_symbol +
+                              ' already in list. Skipping insertion')
+
+            member_set.add(symbol_w_prefix)
+        if len(member_set) == 0:
             issues.append('Not a single gene symbol found. Skipping '
                           'insertion of member attribute for node ' +
                           str(node))
             return issues
 
         network.set_node_attribute(node['@id'], NodeMemberUpdator.MEMBER,
-                                   memberlist,
+                                   list(member_set),
                                    type='list_of_string', overwrite=True)
         return issues
 
